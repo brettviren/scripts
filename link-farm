@@ -66,17 +66,14 @@ def filter_prefered_extensions(entry, *args):
     files = [] 
     for name in names:
         es = n2e[name]
-        debug ('filter: name=%s es=%s pref=%s' % (name,es,prefered))
         if len(es) == 1: 
             files.append(name + '.' + es[0])
             continue            # only one so keep it
         bail=False
         for want in prefered:
-            debug ('filter: checking %s in %s from %s' % (want,es, prefered))
             if want in es:
                 files.append(name + '.' + want)
                 bail=True
-                debug ('filter: got it: %s in %s' % (want,es))
                 break           # got prefered
             continue
         if bail: continue
@@ -105,6 +102,8 @@ def action_symlink(src,dst,entry):
     Symlink the os.walk() entry, rooted at src into destination dst,
     making any intermediate subdirectories as needed.
     '''
+    if src[-1] != '/': src += '/'
+
     debug ('symlink: "%s" --> "%s" with entry at "%s":' % (src, dst, entry[0]))
     if not len(entry[2]): return
 
