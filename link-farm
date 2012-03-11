@@ -1,0 +1,156 @@
+#!/usr/bin/env python
+'''
+Build a hierarchy of directories and symlinks that partially mirrors
+one or more others.
+
+'''
+
+import os
+import argparse
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser(description = 'Make a symlink farm.')
+    parser.add_argument('-s', '--source',
+                        required = True,
+                        type = str,
+                        help = 'base directory to mirror')
+    parser.add_argument('-d', '--destination', 
+                        required = True,
+                        type = str,
+                        help = 'base directory for link farm')
+    parser.add_argument('-f','--filter',
+                        type = str,
+                        default = 'noop',
+                        help = 'set filter')
+    parser.add_argument('-a','--action',
+                        type = str,
+                        default = 'print',
+                        help = 'set action')
+    return parser.parse_args()
+
+
+def filter_noop(entry, *args): return entry;
+
+def filter_prefered_extensions(entry, *args):
+    '''
+    Filter an os.walk() entry retaining only prefered extensions.
+    '''
+    cwd,subdirs,files = entry
+    prefered = args
+    #print 'filter:prefered: %s (type=%s)' % (prefered,type(prefered))
+
+    names = set()
+    n2e = dict()
+
+    # collect file names and map name to extensions
+    for maybe in files:
+        n,e = os.path.splitext(maybe)
+        names.add(n)
+        es = n2e.get(n)
+        if es is None: n2e[n] = es = list()
+        es.append(e[1:])        # same extension w/out leading '.'
+        continue
+
+    # pic files to save
+    files = [] 
+    for name in names:
+        es = n2e[name]
+        #print 'filter: name=%s es=%s pref=%s' % (name,es,prefered)
+        if len(es) == 1: 
+            files.append(name + '.' + es[0])
+            continue            # only one so keep it
+        bail=False
+        for want in prefered:
+            #print 'filter: checking %s in %s from %s' % (want,es, prefered)
+            if want in es:
+                files.append(name + '.' + want)
+                bail=True
+                #print 'filter: got it: %s in %s' % (want,es)
+                break           # got prefered
+            continue
+        if bail: continue
+        # hmm, none are prefered, keep all
+        for want in es:
+            files.append(name + '.' + want)
+            continue
+        continue
+    return (cwd,subdirs,files)
+        
+
+def make_filter(argstr):
+    '''
+    Convert an argstring like 'filter_name:arg1,arg2' into a tuple
+    holding the filter function and a list of args as strings
+    '''
+    func,fargs = argstr.split(':')
+    arglist = fargs.split(',')
+    func = eval('filter_%s' % func)
+    #print 'make_filter: %s and %s is %s' % (func,arglist,type(arglist))
+    return func,arglist
+    
+
+def action_symlink(src,dst,entry):
+    '''
+    Symlink the os.walk() entry, rooted at src into destination dst,
+    making any intermediate subdirectories as needed.
+    '''
+    print 'symlink: "%s" --> "%s" with entry at "%s":' % (src, dst, entry[0])
+    if not len(entry[2]): return
+
+    cwd,subdirs,files = entry
+
+    realsrcdir = os.path.realpath(src)
+
+    targdir = entry[0]
+    reldir = targdir[len(src):]
+
+    dstdir = os.path.join(dst,reldir)
+    print 'os.makeidrs("%s")' % dstdir
+    os.makedirs(dstdir)
+
+    for target in entry[2]:
+        srcfile = os.path.join(realsrcdir,target)
+        dstfile = os.path.join(dstdir,target)
+        print 'link: "%s" --> "%s"' % (srcfile,dstfile)
+        try:                    # prefer hardlinks
+            os.link(srcfile,dstfile)
+        except OSError:
+            os.symlink(srcfile,dstfile)
+        continue
+    return
+
+    
+def action_print(src, dst, entry):
+    '''
+    Print something for each entry:
+    '''
+    print 'noop: "%s" --> "%s" with entry at "%s":' % (src, dst, entry[0])
+    for f in entry[2]:
+        print '\t"%s"' % f
+        continue
+    return
+
+
+if __name__ == '__main__':
+    import sys
+    args = parse_args(sys.argv[1:])
+
+    filt,filtargs = make_filter(args.filter)
+    action = eval('action_%s' % args.action)
+
+    print args.source
+    entries = list(os.walk(args.source))
+    filtered = [filt(x,*filtargs) for x in entries]
+
+    for entry in filtered:
+        action(args.source, args.destination, entry)
+        continue
+
+
+
+    
+
+
+# todo:
+# 
+# - allow for multiple filters
