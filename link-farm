@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 '''
-Build a hierarchy of directories and symlinks that partially mirrors
-one or more others.
+Build a hierarchy of directories and symlinks that partially mirror
+another.
 
+example usage:
+
+ link-farm -s from-here -d to-here -f with_filter:and,some,args ext,that,are,liked
 '''
 
 import os
@@ -29,6 +32,14 @@ def parse_args(argv):
     return parser.parse_args()
 
 
+def debug(string):
+    #print 'debug:', string
+    return
+
+def warning(string):
+    print 'warning:', string
+    return
+
 def filter_noop(entry, *args): return entry;
 
 def filter_prefered_extensions(entry, *args):
@@ -37,7 +48,7 @@ def filter_prefered_extensions(entry, *args):
     '''
     cwd,subdirs,files = entry
     prefered = args
-    #print 'filter:prefered: %s (type=%s)' % (prefered,type(prefered))
+    debug ('filter:prefered: %s (type=%s)' % (prefered,type(prefered)))
 
     names = set()
     n2e = dict()
@@ -55,17 +66,17 @@ def filter_prefered_extensions(entry, *args):
     files = [] 
     for name in names:
         es = n2e[name]
-        #print 'filter: name=%s es=%s pref=%s' % (name,es,prefered)
+        debug ('filter: name=%s es=%s pref=%s' % (name,es,prefered))
         if len(es) == 1: 
             files.append(name + '.' + es[0])
             continue            # only one so keep it
         bail=False
         for want in prefered:
-            #print 'filter: checking %s in %s from %s' % (want,es, prefered)
+            debug ('filter: checking %s in %s from %s' % (want,es, prefered))
             if want in es:
                 files.append(name + '.' + want)
                 bail=True
-                #print 'filter: got it: %s in %s' % (want,es)
+                debug ('filter: got it: %s in %s' % (want,es))
                 break           # got prefered
             continue
         if bail: continue
@@ -85,7 +96,7 @@ def make_filter(argstr):
     func,fargs = argstr.split(':')
     arglist = fargs.split(',')
     func = eval('filter_%s' % func)
-    #print 'make_filter: %s and %s is %s' % (func,arglist,type(arglist))
+    debug('make_filter: %s and %s is %s' % (func,arglist,type(arglist)))
     return func,arglist
     
 
@@ -94,7 +105,7 @@ def action_symlink(src,dst,entry):
     Symlink the os.walk() entry, rooted at src into destination dst,
     making any intermediate subdirectories as needed.
     '''
-    print 'symlink: "%s" --> "%s" with entry at "%s":' % (src, dst, entry[0])
+    debug ('symlink: "%s" --> "%s" with entry at "%s":' % (src, dst, entry[0]))
     if not len(entry[2]): return
 
     cwd,subdirs,files = entry
@@ -103,15 +114,21 @@ def action_symlink(src,dst,entry):
 
     targdir = entry[0]
     reldir = targdir[len(src):]
+    debug ('symlink: realsrcdir: "%s", reldir: "%s"' % (realsrcdir, reldir))
 
     dstdir = os.path.join(dst,reldir)
-    print 'os.makeidrs("%s")' % dstdir
-    os.makedirs(dstdir)
+    debug ('os.makeidrs("%s")' % dstdir)
+    if not os.path.exists(dstdir):
+        os.makedirs(dstdir)
+        pass
 
     for target in entry[2]:
-        srcfile = os.path.join(realsrcdir,target)
+        srcfile = os.path.join(realsrcdir,reldir, target)
         dstfile = os.path.join(dstdir,target)
-        print 'link: "%s" --> "%s"' % (srcfile,dstfile)
+        debug ('link: "%s" --> "%s"' % (srcfile,dstfile))
+        if os.path.exists(dstfile):
+            warning ('Skipping linking of preexisting "%s"' % dstfile)
+            continue
         try:                    # prefer hardlinks
             os.link(srcfile,dstfile)
         except OSError:
@@ -138,7 +155,7 @@ if __name__ == '__main__':
     filt,filtargs = make_filter(args.filter)
     action = eval('action_%s' % args.action)
 
-    print args.source
+    debug ('source = %s' % args.source)
     entries = list(os.walk(args.source))
     filtered = [filt(x,*filtargs) for x in entries]
 
