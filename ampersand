@@ -11,22 +11,22 @@ import time
 import subprocess
 import tempfile
 
-def screen_size():
+def get_screen_size():
     from Xlib.display import Display
     display = Display(os.environ.get("DISPLAY",":0.0"))
     root = display.screen().root
     w = root.get_geometry().width
     h = root.get_geometry().height
     return (w,h)
-
+screen_size = get_screen_size()
 
 def do_crop(image):
-    sw,sh = screen_size()
+    sw,sh = screen_size
     sratio = float(sw)/float(sh)
 
     iw,ih = image.size
     iratio = float(iw)/float(ih)
-    print sratio,iratio
+    #print sratio,iratio
 
     if sratio > iratio:             # image is portrait
         crop_width = iw
@@ -46,28 +46,46 @@ def do_crop(image):
 
     return image
 
-def set_background_gnome3(fname):
-    cmd = ['gsettings', 'set', 'org.gnome.desktop.background',
-           'picture-uri', 'file://'+fname]
-    print ' '.join(cmd)
-    output = subprocess.check_call(cmd)
-    print output
 
 def shape_background(infile, outfile):
     '''
     Take infile and optimally shape it to fit the root window saving
     it to outfile.
     '''
-    image  = Image.open(infile)
+    try:
+        image  = Image.open(infile)
+    except IOError,msg:
+        print msg
+        print 'File: "%s"' % infile
+        raise
+
     crop = do_crop(image)
     crop.save(outfile,quality=95)
+    del(crop)
+    del(image)
+    return
+
+def set_background_gnome3(fname):
+    cmd = ['gsettings', 'set', 'org.gnome.desktop.background',
+           'picture-uri', 'file://'+fname]
+    #print ' '.join(cmd)
+    output = subprocess.check_call(cmd)
+    #print output
+    return
+
+def set_background_lxde(fname):
+    cmd = ['pcmanfm', '-w', fname, '--wallpaper-mode=stretch']
+    #print ' '.join(cmd)
+    output = subprocess.check_call(cmd)
+    #print output
     return
 
 def set_background(fname):
     '''
     Set the background root window with given file.
     '''
-    set_background_gnome3(fname)
+    #set_background_gnome3(fname)
+    set_background_lxde(fname)
 
 
 def get_file(dname):
