@@ -33,18 +33,16 @@ def do_crop(image):
         crop_height = int(iw/sratio)
         x = 0
         y = random.randint(0,ih-crop_height)
-        crop = image.crop((x,y,x+crop_width,y+crop_height))
-        return crop
+        return image.crop((x,y,x+crop_width,y+crop_height)).resize((sw,sh))
 
-    if sratio < iratio:         # image is landscape
+    elif sratio < iratio:         # image is landscape
         crop_width = int(ih*sratio)
         crop_height = ih
         x = random.randint(0,iw-crop_width)
         y = 0
-        crop = image.crop((x,y,x+crop_width,y+crop_height))
-        return crop
+        return image.crop((x,y,x+crop_width,y+crop_height)).resize((sw,sh))
 
-    return image
+    return image.resize((sw,sh))
 
 
 def shape_background(infile, outfile):
@@ -61,6 +59,7 @@ def shape_background(infile, outfile):
 
     crop = do_crop(image)
     crop.save(outfile,quality=95)
+
     del(crop)
     del(image)
     return
@@ -68,24 +67,30 @@ def shape_background(infile, outfile):
 def set_background_gnome3(fname):
     cmd = ['gsettings', 'set', 'org.gnome.desktop.background',
            'picture-uri', 'file://'+fname]
-    #print ' '.join(cmd)
     output = subprocess.check_call(cmd)
-    #print output
+    return
+
+def set_background_gnome2(fname):
+    cmd = ['gconftool-2', '-t', 'str', '-s', '/desktop/gnome/background/picture_filename ', fname]
+    output = subprocess.check_call(cmd)
+    return
+
+def set_background_mate(fname):
+    cmd = ['mateconftool-2', '-t', 'string', '-s', '/desktop/mate/background/picture_filename', fname]
+    output = subprocess.check_call(cmd)
     return
 
 def set_background_lxde(fname):
     cmd = ['pcmanfm', '-w', fname, '--wallpaper-mode=stretch']
-    #print ' '.join(cmd)
     output = subprocess.check_call(cmd)
-    #print output
     return
 
-def set_background(fname):
-    '''
-    Set the background root window with given file.
-    '''
-    #set_background_gnome3(fname)
-    set_background_lxde(fname)
+def set_background_x11(fname):
+    cmd = ['xloadimage', '-onroot', fname]
+    output = subprocess.check_call(cmd)
+    return
+
+set_background = set_background_mate
 
 
 def get_file(dname):
@@ -94,9 +99,12 @@ def get_file(dname):
         while True:
             fname = random.choice(files)
             if fname[0] != '.':
-                return os.path.join(path,fname)
+                fname = os.path.join(path,fname)
+                if os.path.exists(fname):
+                    return fname
             continue
         continue
+    print 'No files found in "%s"' % picdir
     return None
 
 
@@ -120,6 +128,6 @@ if __name__ == '__main__':
     try:
         dname = sys.argv[1]
     except IndexError:
-        dname = "$HOME/Desktop/backgrounds"
+        dname = "$HOME/Desktop/bkg"
     cycle(dname,300)
 
