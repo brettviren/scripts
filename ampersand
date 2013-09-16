@@ -3,6 +3,8 @@
 Set X11 background.
 '''
 
+# oh, look: http://wiki.mate-desktop.org/docs:gsettings
+
 import os
 import sys
 import Image
@@ -50,32 +52,39 @@ def shape_background(infile, outfile):
     Take infile and optimally shape it to fit the root window saving
     it to outfile.
     '''
-    try:
-        image  = Image.open(infile)
-    except IOError,msg:
-        print msg
-        print 'File: "%s"' % infile
-        raise
+    with open(infile, 'rb') as infp:
+        try:
+            image  = Image.open(infp)
+        except IOError,msg:
+            print msg
+            print 'File: "%s"' % infile
+            raise
 
-    crop = do_crop(image)
-    crop.save(outfile,quality=95)
+        crop = do_crop(image)
+        crop.save(outfile,quality=95)
 
-    del(crop)
-    del(image)
+        del(crop)
+        del(image)
     return
 
-def set_background_gnome3(fname):
+def set_background_gsettings_mate(fname):
+    cmd = ['gsettings', 'set', 'org.mate.background',
+           'picture-filename', fname]
+    output = subprocess.check_call(cmd)
+    return
+
+def set_background_gsettings_gnome(fname):
     cmd = ['gsettings', 'set', 'org.gnome.desktop.background',
            'picture-uri', 'file://'+fname]
     output = subprocess.check_call(cmd)
     return
 
-def set_background_gnome2(fname):
+def set_background_gconftool2(fname):
     cmd = ['gconftool-2', '-t', 'str', '-s', '/desktop/gnome/background/picture_filename ', fname]
     output = subprocess.check_call(cmd)
     return
 
-def set_background_mate(fname):
+def set_background_mateconftool2(fname):
     cmd = ['mateconftool-2', '-t', 'string', '-s', '/desktop/mate/background/picture_filename', fname]
     output = subprocess.check_call(cmd)
     return
@@ -90,7 +99,7 @@ def set_background_x11(fname):
     output = subprocess.check_call(cmd)
     return
 
-set_background = set_background_mate
+set_background = set_background_gsettings_mate
 
 
 def get_file(dname):
@@ -116,10 +125,12 @@ def cycle(dname, delay):
         infile = get_file(dname)
         orig,ext = os.path.splitext(infile)
         fp,outfile = tempfile.mkstemp(ext)
+        print fp,outfile
         shape_background(infile,outfile)
         set_background(outfile)
         time.sleep(delay)
         if os.path.exists(outfile):
+            os.close(fp)        # without this it will leak open files
             os.remove(outfile)
         continue
     return
@@ -130,4 +141,5 @@ if __name__ == '__main__':
     except IndexError:
         dname = "$HOME/Desktop/bkg"
     cycle(dname,300)
+ 
 
