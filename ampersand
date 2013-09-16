@@ -125,7 +125,6 @@ def cycle(dname, delay):
         infile = get_file(dname)
         orig,ext = os.path.splitext(infile)
         fp,outfile = tempfile.mkstemp(ext)
-        print fp,outfile
         shape_background(infile,outfile)
         set_background(outfile)
         time.sleep(delay)
