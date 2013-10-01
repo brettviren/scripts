@@ -1,0 +1,20 @@
+#+title: Some Scripts
+
+This repository is a grab-bag of scripts.  They are in various states of non-working, probably bitrotted all to hell.  They might delete your home directory and get you pregnant.  
+
+* link-farm
+
+Mirror one directory into another with links.
+
+* ampersand
+
+Pick random images from a directory, crop them to match the desktop aspect ratio and set as background.  Needs PIL and Xlib.  It has several ways to set the background depending on what desktop is in the way.
+
+* sawfish-git
+
+Build sawfish/rep-gtk/librep from their git repositories.
+
+* deadend
+
+Set gnome/mate terminal properties.
+

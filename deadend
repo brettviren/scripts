@@ -1,0 +1,206 @@
+#!/usr/bin/env python
+'''
+Set terminal properties.
+
+This works for gsettings-based desktops.  
+
+Warning: mistakes tend to lead to silent failures.
+
+Some gsettings commands to scope out the sitch:
+
+  gsettings get org.mate.terminal.global profile-list
+  gsettings set org.mate.terminal.global profile-list "['default', 'profile0']"
+  gsettings list-recursively org.mate.terminal.profile:/org/mate/terminal/profiles/profile0/
+
+'''
+
+# hey, look at this:
+#https://github.com/mate-desktop/mate-desktop/blob/master/mate-conf/mate-conf-import
+
+import argparse
+from gi.repository import Gio
+
+class TerminalProperties(object):
+    def __init__(self, desktop = 'mate'):
+        self.top_schema = 'org.%s.terminal.global' % desktop
+        self.profile_schema = 'org.%s.terminal.profile' % desktop
+        self.profile_pattern = '/org/%s/terminal/profiles' % desktop
+        self.profile_pattern += '/%s/'
+        self.top = Gio.Settings.new(self.top_schema)
+        #self.top.delay()
+
+    def profiles(self):
+        'Return list of profile names'
+        return map(str, self.top.get_value('profile-list'))        
+
+    def add(self, name):
+        'Add a new profile named name if it does not yet exist'
+        profiles = self.profiles()
+        if name not in profiles:
+            print 'Adding profile: %s' % name
+            profiles.append(name)
+            self.top.set_strv('profile-list', profiles)
+            self.set(name, visible_name=name)
+        return
+
+    def remove(self, name):
+        'Remove a profile named name if it exists'
+        profiles = self.profiles()
+        while name in profiles:
+            profiles.remove(name)
+        if len(profiles) < len(self.profiles()):
+            self.top.set_strv('profile-list', profiles)
+        return
+
+    def profile(self, name):
+        'Return the profile settings object'
+        self.add(name)
+        p = Gio.Settings.new_with_path(self.profile_schema, self.profile_pattern%name)
+        #p.delay()
+        return p
+
+    def set(self, name, **params):
+        'Set given parameters to named profile.'
+        p = self.profile(name)
+        p.delay()
+        for k,v in params.items():
+            k = k.replace('_','-')
+            t = type(v)
+            if t == str:
+                p.set_string(k, v)
+            elif t == bool:
+                p.set_boolean(k, v)
+            elif t == float:
+                p.set_double(k, float(v))
+            elif t == int:
+                p.set_int(k, v)
+            else:
+                print 'Unknown type not set %s: %s:%s %s' % (name, k, v, t)
+                continue
+            print 'Set %s: %s:%s %s' % (name, k, v, t)
+        p.apply()
+
+    def get(self, name):
+        'Get all parametrs for named profile'
+        p = self.profile(name)
+        ret = {}
+        for k in p.keys():
+            v = p.get_value(k)
+            t = v.get_type_string()
+            if t == 's':
+                v = v.get_string()
+            elif t == 'b':
+                v = v.get_boolean()
+            elif t == 'i':
+                v = v.get_int32()
+            elif t == 'd':
+                v = v.get_double()
+            else:
+                print 'Got unknown type %s: %s:%s (%s)' % ( name, k, v, t )
+
+            ret[k] = v
+        return ret
+
+    pass
+    
+
+
+# from http://ethanschoonover.com/solarized
+# via https://github.com/sigurdga/gnome-terminal-colors-solarized
+BASE03 = '#002B36'
+BASE02 = '#073642'
+BASE01 = '#586E75'
+BASE00 = '#657B83'
+BASE0 = '#839496'
+BASE1 = '#93A1A1'
+BASE2 = '#EEE8D5'
+BASE3 = '#FDF6E3'
+YELLOW = '#B58900'
+ORANGE = '#CB4B16'
+RED = '#DC322F'
+MAGENTA = '#D33682'
+VIOLET = '#6C71C4'
+BLUE = '#268BD2'
+CYAN = '#2AA198'
+GREEN = '#859900'
+# 16 colors palette
+PALETTE = [BASE02, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, BASE2,
+           BASE03, ORANGE, BASE01, BASE00, BASE0, VIOLET, BASE1, BASE3]
+SCHEMES = {'dark': {'background_color': BASE03,
+                    'foreground_color': BASE0,
+                    'bold_color': BASE1},
+           'light': {'background_color': BASE3,
+                     'foreground_color': BASE00,
+                     'bold_color': BASE01}}
+
+def themes(name = None):
+    t = {
+        'lunarize':  {
+            'palette': ':'.join(PALETTE),
+            'use-theme-colors': False,
+            'bold-color-same-as-fg': False,
+            'background-color': BASE03,
+            'foreground-color': BASE0,
+            'bold-color': BASE1
+        },
+        'solarize': {
+            'palette': ':'.join(PALETTE),
+            'use-theme-colors': False,
+            'bold-color-same-as-fg': False,
+            'background-color': BASE3,
+            'foreground-color': BASE00,
+            'bold-color': BASE01
+        },
+    }
+    if not name:
+        return t;
+    return t[name]
+
+
+
+
+def get_arg_parser():
+    parser = argparse.ArgumentParser(description = 'deadend [options] <profile>')
+    parser.add_argument('-t', '--theme', type=str, default=None,
+                        help = 'set theme properties to given profile')
+    parser.add_argument('-l', '--list', action="store_true",
+                        help = 'list known themes')
+    parser.add_argument('-c', '--copy', type=str, default=None,
+                        help = 'copy an existing profile')
+    parser.add_argument('-d', '--desktop', type=str, default='mate',
+                        help = 'set the desktop (default is mate)')
+    parser.add_argument('profile', type=str, nargs='?', default='default')
+    return parser
+
+def main():
+    parser = get_arg_parser()
+    args = parser.parse_args()
+
+    tp = TerminalProperties(args.desktop)
+
+    params = {}
+    if args.theme:
+        params.update(themes(args.theme))
+
+    if args.copy:
+        params.update(tp.get(args.copy))
+        params['visible-name'] = args.profile
+
+    if params:
+        tp.set(args.profile, **params)
+
+    if args.list:
+        tnames = ' '.join(sorted(themes().keys()))
+
+        pnames = tp.profiles()
+        vnames = [tp.get(x).get('visible-name','none') for x in pnames]
+
+        pvnames = ' '.join(['%s (%s)' % (p,v) for p,v in zip(pnames, vnames)])
+        print 'themes: %s\nprofiles: %s' % (tnames, pvnames)
+
+    tp.top.apply()
+    return
+
+
+if '__main__' == __name__:
+    main()
