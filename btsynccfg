@@ -1,0 +1,334 @@
+#!/usr/bin/env python
+'''
+Help configure btsync.
+
+Run:
+
+  btsynccfg help  
+
+'''
+
+import os
+import json
+import re
+import subprocess
+
+btsync_exe = 'btsync'
+
+# fixme: add cmd line options with setting this as default
+default_config_file = os.path.expanduser('~/etc/btsync.cfg')
+#default_config_file = os.path.expanduser('~/test-btsync.cfg')
+
+# As produced by 'btsync --dump-sample-config
+default_config_data = dict(
+    device_name = "My Sync Device",
+    listening_port = 0,
+    storage_path = os.path.expanduser("~/.sync"),
+    #pid_file = "/var/run/btsync/btsync.pid",
+    check_for_updates = True, 
+    use_upnp = True,
+    download_limit = 0,
+    upload_limit = 0, 
+    shared_folders = [],
+)
+    
+default_folder_data = dict(
+    secret = None,              # required
+    dir = None,                 # required
+    use_relay_server = False,
+    use_tracker = False, 
+    use_dht = False,
+    search_lan = True,
+    use_sync_trash = True,
+    known_hosts = [],
+)    
+
+
+def strip_comments(string):
+    '''
+    Strip out C/C++ like comments from a string.
+    Taken from:
+      http://www.lifl.fr/~riquetd/parse-a-json-file-with-comments.html
+    '''
+    comment_re = re.compile(
+        '(^)?[^\S\n]*/(?:\*(.*?)\*/[^\S\n]*|/[^\n]*)($)?',
+        re.DOTALL | re.MULTILINE
+    )
+    match = comment_re.search(string)
+    while match:
+        # single line comment
+        string = string[:match.start()] + string[match.end():]
+        match = comment_re.search(string)
+    return string
+
+
+
+def load_config(filename = default_config_file):
+    return json.loads(strip_comments(open(filename).read()))
+
+def save_config(data, filename = default_config_file):
+    os.chmod(filename, 0600)
+    with open(filename,'w') as fp:
+        fp.write(json.dumps(data, indent=2))
+    os.chmod(filename, 0400)
+
+def loop_folders(data, fcn):
+    'Loop over folders call fcn on each, return first non-Null'
+    for sf in data['shared_folders']:
+        val = fcn(sf)
+        if val is not None:
+            return val
+    return
+    
+def get_folder(data, key):
+    def match_key(folder):
+        if key.startswith('/'):
+            if folder['dir'] == key:            
+                return folder
+        if folder['secret'] == key:
+            return folder
+        if get_ro_secret(folder['secret']) == key:
+            return folder
+        return None
+    return loop_folders(data, match_key)
+
+def get_folder_names(data):
+    folders = []
+    def a2fs(f): 
+        folders.append(f['dir'])
+        return
+    loop_folders(data, a2fs)
+    return folders
+
+def get_folders(data):
+    folders = []
+    def a2fs(f): 
+        folders.append(f)
+        return None
+    loop_folders(data, a2fs)
+    return folders
+
+def del_folder(cfg, key):
+    f = get_folder(cfg, key)
+    if not f: return
+
+    new_folders = []
+    def a2fs(folder): 
+        if f == folder: return
+        new_folders.append(folder)
+        return
+    cfg['shared_folders'] = new_folders
+    return f
+
+def add_folder(data, dir, secret, **kwds):
+    new_folder = dict(default_folder_data, dir=dir, secret=secret, **kwds)
+    folders = get_folders(data)
+    folders.append(new_folder)
+    data['shared_folders'] = folders
+    return new_folder
+
+def make_secret():
+    cmd = "%s --generate-secret" % btsync_exe
+    return subprocess.check_output(cmd.split()).strip()
+
+def get_ro_secret(secret):
+    cmd = "%s --get-ro-secret %s" % (btsync_exe, secret)
+    return subprocess.check_output(cmd.split()).strip()
+
+def du_dir(dir):
+    total_size = 0
+    nfiles = 0
+    for dirpath, dirnames, filenames in os.walk(dir):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            total_size += os.path.getsize(fp)
+            nfiles += 1
+    return (nfiles, total_size)
+
+def do_survey_folder(folder):
+    nlive, slive = du_dir(folder['dir'])
+    narch, sarch = du_dir(os.path.join(folder['dir'], '.SyncArchive'))
+    return nlive,slive,narch,sarch
+
+## commands
+
+def cmd_init(filename, *args, **kwds):
+    '''<filename> [<param>=<val> ...]
+    Write an initial configuration to <filename>.
+    '''
+    cfg = dict(default_config_data, **kwds)
+    with open(filename, 'w') as fp:
+        fp.write(json.dumps(cfg, indent=2) + '\n')
+
+def cmd_list(*args, **kwds):
+    '''
+    List the configured shares.
+    '''
+    print '\n'.join(get_folder_names(load_config()))
+
+def cmd_dump(*args, **kwds):
+    '''[<key> ...]
+    Dump the configuration file or just for one folder matching key.
+    '''
+    cfg = load_config()
+    if not args:
+        print json.dumps(cfg, indent=2)
+        return
+    folders = list()
+    for key in args:
+        f = get_folder(cfg, key)
+        if not f: continue
+        folders.append(f)
+    print json.dumps(folders, indent=2)
+
+def cmd_del(key, *args, **kwds):
+    '''<key>
+    Delete a share based on a key (directory or secret).
+    '''
+    cfg = load_config()
+    f = del_folder(cfg, key)
+    if not f:
+        print 'No share found matching %s' % key
+        return
+    print 'Removed %s' % f['dir']
+    save_config(cfg)
+
+def cmd_add(dir, secret=None, *args, **kwds):
+    '''<dir> [<secret>] [<param>=<val> ...]
+    Add a share for the given directory.
+    '''
+    if not secret:
+        secret = make_secret()
+    cfg = load_config()
+    dead = del_folder(cfg, dir)
+    new = add_folder(cfg, dir, secret, **kwds)
+    save_config(cfg)
+
+def cmd_config(key, *args, **kwds):
+    '''<key> [<param>=<val> ...]
+    Modify the configuration for the key (directory or secret)
+    '''
+    cfg = load_config()
+    old = del_folder(cfg, key)
+    new = dict(old, **kwds)
+    add_folder(cfg, **new)
+    save_config(cfg)
+
+
+def cmd_ro_secret(key, *args, **kwds):
+    '''<key>
+    Display the RO secret for the key (directory or secret)
+    '''
+    cfg = load_config()
+    f = get_folder(cfg, key)
+    if not f:
+        print 'No share found matching %s' % key
+        return
+    print get_ro_secret(f['secret'])
+    
+def cmd_secret(key, *args, **kwds):
+    '''<key>
+    Display the RW secret for the key (directory or secret)
+    '''
+    cfg = load_config()
+    f = get_folder(cfg, key)
+    if not f:
+        print 'No share found matching %s' % key
+        return
+    print f['secret']
+
+def cmd_survey(*args, **kwds):
+    '''[<key> ...]
+    Survey one or all shares.
+    '''
+    cfg = load_config()
+    if not args:
+        folders = get_folders(cfg)
+    else:
+        folders = [get_folder(cfg, key) for key in args]
+    print '%d folders:' % len(folders)
+    for folder in folders:
+        print folder['dir'],':', do_survey_folder(folder)
+
+def cmd_purge_archive(key, *args, **kwds):
+    '''<key>
+    Purge the archive of share given by <key>.
+    '''
+    cfg = load_config()
+    folder = get_folder(cfg, key)
+    sapath = os.path.join(folder['dir'],'.SyncArchive')
+    for fname in os.listdir(sapath):
+        fpath = os.path.join(sapath, fname)
+        print 'Removing %12d %s' % (os.path.getsize(fpath), fpath)
+        os.remove(fpath)
+
+def cmd_stop(*args, **kwds):
+    '''
+    Stop btsync
+    '''
+    cfg = load_config()
+    kill = 'pkill btsync'
+    if os.path.exists(cfg['pid_file']):
+        kill = 'pkill -F %s' % cfg['pid_file']
+    subprocess.call(kill.split())
+
+def cmd_start(*args, **kwds):
+    '''
+    Start btsync
+    '''
+    cfg = load_config()
+    start = '%s --config %s' % (btsync_exe, default_config_file)
+    subprocess.check_call(start.split())
+
+def cmd_restart(*args, **kwds):
+    '''
+    Restart btsync
+    '''
+    cmd_stop()
+    cmd_start()
+
+def cmd_help(*args, **kwds):
+    for k,v in sorted(globals().items()):
+        if k.startswith('cmd_'):
+            cmd = k[4:].replace('_','-')
+            if cmd in ['help']:
+                continue
+            print '%s %s' % (k[4:].replace('_','-'), v.__doc__)
+
+## command line
+
+def typestring(string):
+    string = string.strip()
+    if string.startswith('[') and string.endswith(']'):
+        return map(typestring, string[1:-1].split(','))
+
+    if string.lower() in ['true','yes','on']:
+        return True
+    if string.lower() in ['false','no','off']:
+        return False
+
+    if string.isdigit():
+        return int(string)
+
+    return string
+
+
+def args2listdict(*args):
+    l = list()
+    d = dict()
+    for a in args:
+        if '=' in a:
+            k,v = [x.strip() for x in a.split('=',1)]
+            d[k] = typestring(v)
+        else:
+            l.append(typestring(a))
+    return l,d
+
+if __name__ == '__main__':
+    import sys
+    cmd = sys.argv[1].replace('-','_')
+    meth = eval('cmd_'+ cmd)
+    l,d = args2listdict(*sys.argv[2:])
+    rc = meth(*l, **d)
+    sys.exit(rc or 0)
+
