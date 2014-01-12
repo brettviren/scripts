@@ -134,6 +134,8 @@ def make_secret():
     return subprocess.check_output(cmd.split()).strip()
 
 def get_ro_secret(secret):
+    if not secret.startswith('A'):
+        return None
     cmd = "%s --get-ro-secret %s" % (btsync_exe, secret)
     return subprocess.check_output(cmd.split()).strip()
 
