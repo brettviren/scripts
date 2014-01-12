@@ -1,0 +1,5 @@
+# List of users that should have btsync started if a ~/.sync directory exists.
+BTSYNC_USERS="bv"
+
+# Location of the user's btsync config file w.r.t. their home
+BTSYNC_CONFIG='.sync/config.json'

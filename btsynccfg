@@ -15,16 +15,18 @@ import subprocess
 
 btsync_exe = 'btsync'
 
-# fixme: add cmd line options with setting this as default
-default_config_file = os.path.expanduser('~/etc/btsync.cfg')
-#default_config_file = os.path.expanduser('~/test-btsync.cfg')
+# FIXME: add cmd line options with setting this as default.
+# note, if there is system-level per-user btsync start this aught to
+# match what is expected there.
+default_config_file = os.path.expanduser('~/.sync/config.json')
+
 
 # As produced by 'btsync --dump-sample-config
 default_config_data = dict(
     device_name = "My Sync Device",
     listening_port = 0,
     storage_path = os.path.expanduser("~/.sync"),
-    #pid_file = "/var/run/btsync/btsync.pid",
+    pid_file = os.path.expanduser("~/.sync/btsync.pid"),
     check_for_updates = True, 
     use_upnp = True,
     download_limit = 0,
