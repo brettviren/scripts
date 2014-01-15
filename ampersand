@@ -99,8 +99,8 @@ def set_background_x11(fname):
     output = subprocess.check_call(cmd)
     return
 
-#set_background = set_background_gsettings_mate
-set_background = set_background_lxde
+set_background = set_background_gsettings_mate
+#set_background = set_background_lxde
 
 
 def get_file(dname):
