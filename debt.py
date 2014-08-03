@@ -97,10 +97,12 @@ def TorrentInfo(*args, **kwds):
     TI = namedtuple('TorrentInfo', 
                     'files peers seed_time name state seeds tracker_status progress id size')
     kwds.setdefault('Progress',None)
+    kwds.setdefault('Seeds',None)
     return XxxInfo(TI, *args, **kwds)
 
 def FileInfo(*args, **kwds):
     FI = namedtuple('FileInfo','path size units progress priority')
+    args = [a.strip() for a in args]
     return XxxInfo(FI, *args, **kwds)
 
 
@@ -130,7 +132,7 @@ def parse_info(text):
             continue
         if state is None:
             key,val = line.split(':',1)
-            cur[key] = val
+            cur[key] = val.strip()
             continue
         if state == "files":
             fi = FileInfo(*re.match(file_re, line).groups())
@@ -152,7 +154,7 @@ def get_torinfo(name, torlist):
 
 def tor_complete_download(tor):
     for finfo in tor.files:
-        if finfo.progress.startswith('100'):
+        if not finfo.progress.startswith('100'):
             return False
     return True
 
@@ -238,22 +240,20 @@ def deluge_remove(ident, delete = False):
     return deluge_command('rm %s %s' % (args, ident))
 
 if '__main__' == __name__:
-    # filename = sys.argv[1]
-    # if os.path.exists(filename):
-    #     print 'Using existing file: %s' % filename
-    #     text = open(filename).read()
-    # else:
-    #     print 'Writing new file: %s' % filename
-    #     text = deluge_info()
-    #     open(sys.argv[1],'w').write(text)        
     text = deluge_info()
+    #open("lastinfo.txt","w").write(text)
 
     btsync_dir = params['btsync_dir']
     inbox_dir = params['inbox_dir']
 
     pi = parse_info(text)
     for tor in pi:
-        print 'Torrent:',tor.name, 'Files:', len(tor.files)
+        print 'Torrent: %s' % tor.name
+        print 'State: "%s"' % tor.state
+        if tor.state == 'Paused':
+            continue
+
+        print 'Files:', len(tor.files)
 
         done = tor_complete_download(tor)
         if not done:
