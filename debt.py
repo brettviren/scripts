@@ -241,16 +241,21 @@ def deluge_remove(ident, delete = False):
 
 if '__main__' == __name__:
     text = deluge_info()
-    #open("lastinfo.txt","w").write(text)
+    open("lastinfo.txt","w").write(text)
 
     btsync_dir = params['btsync_dir']
     inbox_dir = params['inbox_dir']
 
     pi = parse_info(text)
     for tor in pi:
-        print 'Torrent: %s' % tor.name
+        print '\nTorrent: %s' % tor.name
         print 'State: "%s"' % tor.state
         if tor.state == 'Paused':
+            continue
+
+        # avoid race condition caused by freshly added torrent
+        if 0 == len(tor.files):
+            print 'torrent shows no files (yet?), skip for now'
             continue
 
         print 'Files:', len(tor.files)
