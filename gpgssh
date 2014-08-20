@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# A variation on this theme:
+# http://efreedom.com/Question/3-161973/Can-Forward-Gpg-Key-Via-Ssh-Agent
+
+
+usage () {
+    cat <<EOF
+ usage: gpgssh user@remote
+EOF
+    exit 1
+}
+
+uath=$1 ; shift
+if [ -z "$uath" ] ; then
+    usage
+fi
+user=$(echo $uath | cut -d@ -f1)
+remote=$(echo $uath | cut -d@ -f2)
+
+gpgsocket () {
+    if [ -z "$GPG_AGENT_INFO" ] ; then
+	echo "No gpg-agent" 1>&2
+	exit 1
+    fi
+    echo "$GPG_AGENT_INFO" |cut -d: -f1
+}
+    
+run_socat () {
+    while true ; do
+	socat EXEC:"ssh $uath 'socat UNIX-LISTEN:/home/$user/.gnupg/S.gpg-agent -'"  UNIX-CONNECT:$(gpgsocket)
+    done
+}
+
+coproc run_socat
+
+ssh $uath
+
+echo "killing child PID \"$COPROC_PID\""
+kill $COPROC_PID
+

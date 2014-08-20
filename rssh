@@ -1,0 +1,114 @@
+#!/bin/sh
+
+# configure these:
+daya_user=bvdb
+daya_realm_number=2
+lbne_user=bvlbne
+lbne_realm_number=3
+astro_user=bvastro
+astro_realm_number=4
+
+# probably don't configure these
+gateway=rssh.rhic.bnl.gov
+
+# nothing else to touch
+
+usage () {
+    echo $*
+    cat <<EOF
+
+    usage: racf [options] realm
+
+    realm is "daya" or "lbne" or "astro"
+
+    -h <host>:   Explicitly set the internal hostname
+    -u <user>:   Explicitly set the username
+                 (default: lbne:$lbne_user, daya:$daya_user, astro:$astro_user)
+    -n <number>: Define host as realm + number
+    -g:          Just log in to the gateway
+    -m:          Log into rcf.rhic.bnl.gov
+    -t <u@h>:    Set up tunnels back to USER@HOST, use port 2R2N (R seet by realm, N set by -n)
+    -v:          Add -v to ssh cmd lines
+EOF
+    exit 1
+}
+
+set -- `getopt u:h:n:gmt:v $*`
+if [ $? != 0 ] ; then
+    usage "Bad argument"
+    return;
+fi
+
+verbose=""
+host=""
+user=""
+finaluser=""
+realm=""
+realm_number=0
+number="1"
+copy=""
+stop_at_gateway=""
+goto_rcf_main=""
+tunnelback=""
+for arg in $* ; do
+    case $arg in
+	-u) finaluser=$2;    shift 2;;
+	-h) host=$2;    shift 2;;
+	-n) number=$2;  shift 2;;
+	-g) stop_at_gateway=yes; shift;;
+	-m) goto_rcf_main=yes; shift;;
+	-t) tunnelback="$2" ; shift 2;;
+	-v) verbose="-vv" ; shift;;
+	--) shift; break;
+    esac
+done
+if [ -n "$1" ] ; then
+    realm=$1; shift
+fi
+
+if [ -z "$realm" ] ; then
+    usage "No realm set"
+fi
+case $realm in
+    daya*) 
+	user=$daya_user
+	realm_number=$daya_realm_number
+	if [ -z "$host" ] ; then 
+	    host=daya$(printf "%04d" $number)
+	fi
+	;;
+    lbne*) 
+	user=$lbne_user
+	realm_number=$lbne_realm_number
+	if [ -z "$host" ] ; then
+	    host=lbne$(printf "%04d" $number)
+	fi
+	;;
+    astro*) 
+	user=$astro_user
+	realm_number=$astro_realm_number
+	if [ -z "$host" ] ; then
+	    host=astro$(printf "%04d" $number)
+	fi
+	;;
+    *) usage "Unknown realm $realm"
+esac
+if [ -z "$finaluser" ] ; then
+    finaluser=$user
+fi
+if [ -n "$goto_rcf_main" ] ; then
+    host=rcf2.rhic.bnl.gov
+fi
+
+if [ -n "$tunnelback" ] ; then
+    tunnelback="ssh -R2${realm_number}2$number:localhost:22 $tunnelback"
+fi
+
+middleman=${user}@${gateway}
+
+if [ -n "$stop_at_gateway" ] ; then
+    ssh $verbose -X -Y -M -A $middleman
+else
+    echo ssh $verbose -X -Y -M -A -t $middleman ssh -X -Y -A ${finaluser}@$host $tunnelback
+    ssh $verbose -X -Y -M -A -t $middleman ssh $verbose -X -Y -A ${finaluser}@$host $tunnelback
+fi
