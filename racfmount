@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# todo:
+#  only try to mount what isn't already mounted
+#  only try to mount what has a tunnel
+#  set up tunnels
+
+# Note realm numbers probably want to match what are set in rssh.
+
+mount_base=/home/bviren/racf
+
+do_mount () {
+    realm=$1 ; shift
+    number=$1 ; shift
+    case $realm in
+	daya) 
+	    user=bvdb;
+	    realm_num=2;;
+	lbne) 
+	    user=bvlbne
+	    realm_num=3;;
+	astro) 
+	    user=bvastro;
+	    realm_num=4;;
+	*) echo "Unknown realm: $realm"; exit 1;;
+    esac
+
+    host=$(printf "%s%04d" $realm $number)
+    target=$mount_base/$host/root    
+    if [ ! -d $target ] ; then
+	mkdir -p $target
+    fi
+    set -x
+    sshfs -o workaround=rename -p 2${realm_num}2${number} $user@localhost:/ $target
+    set +x
+}
+
+#mount_daya 1
+#mount_daya 5
+#mount_lbne 2
+
+do_mount $1 $2

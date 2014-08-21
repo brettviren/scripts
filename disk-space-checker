@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+
+from subprocess import Popen, PIPE
+
+class DiskSpace(object):
+
+    def __init__(self,local=True):
+        '''Get disk space for volumes, if local is False consider all
+        mounts'''
+
+        self.fs = {}
+
+        cmd = "/usr/bin/di -m -f fubM"
+        if local: cmd += " -l"
+
+        p = Popen(cmd.split(), stdout=PIPE)
+        lines = p.communicate()[0]
+
+        #print '---\n%s---'%lines
+        for line in lines.split("\n"):
+            line = line.strip()
+            words = line.split()
+            if not words: continue
+            if words[0] == 'Free': continue
+            #print words
+            self.fs[words[3]] = map(float,words[0:3])
+            continue
+        return
+
+    def __str__(self):
+        ret = []
+        for name,fut in self.fs.iteritems():
+            ret.append('%15s: %10.2f %10.2f %10.2f %6.2f%% %6.2f%%'%\
+                           (name,fut[0],fut[1],fut[2],
+                            100*fut[0]/fut[2],100*fut[1]/fut[2]))
+        return "\n".join(ret)
+
+    pass
+
+
+host_limits = {
+    'minos':    {'/var':0.90, '/home.local':0.95, '/':0.9},
+    'lycastus': {'/var':0.90, '/home.local':0.95, '/':0.9},
+    'gateway':  {'/':0.9},
+    'home':     {'/home.local':0.95, '/':0.9},
+}
+
+
+if '__main__' == __name__:
+    import os
+
+    ds = DiskSpace()
+    #print ds
+
+    host = os.uname()[1]
+    limits = host_limits[host]
+
+    msg = []
+    for fs,thresh in limits.iteritems():
+        fut = ds.fs[fs]
+        used = fut[1]/fut[2]
+        if used > thresh:
+            line = "OMG %s on %s is %0.2f%% full!"%(fs,host,100*used)
+            msg.append(line)
+            print line
+        continue
+    if msg:
+        cmd = ['/usr/bin/Mail','-s','Full disk report for %s'%host,'bv@bnl.gov']
+        mail = Popen(cmd,stdin=PIPE)
+        mail.communicate('\n'.join(msg))
+    pass
+
+        

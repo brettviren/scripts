@@ -1,0 +1,42 @@
+#!/usr/bin/env python
+
+from getopt import getopt
+import sys, os
+
+delim = ':'
+
+optlist,args = getopt(sys.argv[1:],'s')
+for o,a in optlist:
+    if o == '-s':
+        delim = None
+        continue
+    continue
+
+if not args:
+    for line in sys.stdin.readlines():
+        print 'stdin:'
+        for uhg in line.split(delim):
+            print uhg
+            
+else:
+    for name in args:
+        name = name.upper()
+        var = os.getenv(name)
+        if var is None:
+            pathname = name + 'PATH'
+            var = os.getenv(pathname)
+            if var is None:
+                print '%s and %s unknown'%(name,pathname)
+                continue
+            name=pathname
+            
+        print '%s:'%name
+        if delim is None:
+            lst = var.split()
+        else:
+            lst = var.split(delim)
+        for uhg in lst:
+            print uhg
+
+        
+    

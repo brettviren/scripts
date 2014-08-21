@@ -1,0 +1,123 @@
+#!/usr/bin/env python
+
+import os
+
+class Battery(object):
+    
+    batdir = "/sys/devices/platform/smapi"
+
+    def __init__(self, battery = "BAT0"):
+        self.__dict__['_battery'] = battery
+        return
+
+    def __getattr__(self, name):
+        fn = os.path.join(Battery.batdir,self._battery,name)
+        if not os.path.exists(fn):
+            return self.__dict__[name]
+        fp = open(fn)
+        return fp.readline().strip()
+
+    def __setattr__(self, name, value):
+        fn = os.path.join(Battery.batdir,self._battery,name)
+        if not os.path.exists(fn):
+            self.__dict__[name] = value
+            return
+        fp = open(fn,"w")
+        fp.write(value)
+        fp.close()
+        return
+
+    def __str__(self):
+
+        state = self.state
+        if state == 'charging':
+            rtime = self.remaining_charging_time
+        elif state == 'discharging':
+            rtime = self.remaining_running_time
+        else:
+            rtime = None
+
+        cycles = self.cycle_count
+        dcap = float(self.design_capacity)
+        rcap = float(self.remaining_capacity)
+        lfcap = float(self.last_full_capacity)
+        pnow = float(self.power_now)/1000
+        pavg = float(self.power_avg)/1000
+
+        ret = []
+        ret.append('%s cycles  %.0f%% current and %.0f%% last full capacities'\
+                       %(cycles,100*rcap/dcap,100*lfcap/dcap))
+        ret.append('%s %s%% %s, minutes remain'\
+                       %(state,self.remaining_percent,rtime))
+        ret.append('Start charging at %s%%, stop charging at %s%%.'\
+                       %(self.start_charge_thresh,self.stop_charge_thresh))
+        ret.append('Power now/avg = %.1f/%.1f W'%(pnow,pavg))
+        return '\n'.join(ret)
+    pass
+
+class BatteryMonitor(object):
+    def __init__(self, batobj):
+        self.battery = batobj
+        self._start = None
+        self._stop = None
+        self._trigger = None
+        return
+
+    def charge_limits(self,start,stop,trigger=None):
+        '''Set the start/stop charging limits, if trigger is set,
+        apply them once the remaining percent reaches the trigger'''
+        if not trigger:
+            return self.set_charge_thresh(start,stop)
+        self._start = start
+        self._stop = stop
+        self._trigger = trigger
+        return
+
+    def _check_limits(self):
+        if not self._trigger: return
+        if self._trigger <= float(self.battery.remaining_percent):
+            self.set_charge_thresh(self._start,self._stop)
+            self._trigger = None
+            self._start = None
+            self._stop = None
+            pass
+        return
+
+    def set_charge_thresh(self,start,stop):
+        self.battery.start_charge_thresh = start
+        self.battery.stop_charge_thresh = stop
+        return
+
+    def loop(self,sleep = 5):
+        print self.battery
+        self._check_limits()
+        import time
+        time.sleep(sleep)
+        self.loop(sleep)        # python not tail recursive!
+        return
+    pass
+
+if __name__ == '__main__':
+    import sys
+
+    # Dump status
+    if len(sys.argv) == 1:
+        bat = Battery()
+        print bat
+        pass
+
+    # Immediately set start/stop charge threshold
+    if len(sys.argv) == 3:
+        batmon = BatteryMonitor(Battery())
+        batmon.set_charge_thresh(sys.argv[1],
+                                 sys.argv[2])
+        pass
+
+    # Set start/stop charge thresh when reach remaining percent
+    if len(sys.argv) == 4:
+        batmon = BatteryMonitor(Battery())
+        batmon.charge_limits(sys.argv[1],
+                             sys.argv[2],
+                             sys.argv[3])
+        batmon.loop()
+        pass

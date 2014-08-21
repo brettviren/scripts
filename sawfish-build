@@ -1,0 +1,56 @@
+#!/bin/bash
+
+set -e
+
+workdir="$1" ; shift
+instdir="$1" ; shift
+
+if [ -z "$instdir" ] ; then
+    echo "usage: sawfish-build.sh /path/to/work /path/to/install"
+    exit 1
+fi
+
+if [ "$(readlink /bin/sh)" = "/bin/dash" ] ; then
+    echo "/bin/sh is dash, this build is probably not going to work"
+    exit 1
+fi
+
+export CONFIG_SHELL=/bin/bash
+PATH=$instdir/bin:$PATH
+export PKG_CONFIG_PATH=$instdir/lib/pkgconfig
+
+if [ ! -d "$workdir" ] ; then
+    mkdir -p $workdir
+fi
+workdir="$(readlink -f $workdir)"
+
+pushd $workdir
+
+if [ ! -d librep ] ; then
+    git clone https://github.com/SawfishWM/librep.git
+fi
+pushd librep
+./autogen.sh --prefix=$instdir --exec-prefix=$instdir
+make
+make install
+popd
+
+
+if [ ! -d rep-gtk ] ; then
+    git clone https://github.com/SawfishWM/rep-gtk.git
+fi
+pushd rep-gtk
+./autogen.sh --prefix=$instdir --exec-prefix=$instdir
+make
+make install
+popd
+
+if [ ! -d sawfish ] ; then
+    git clone https://github.com/SawfishWM/sawfish.git
+fi
+pushd sawfish
+./autogen.sh --prefix=$instdir --exec-prefix=$instdir
+make
+make install
+popd
+
