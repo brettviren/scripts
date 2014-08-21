@@ -99,7 +99,15 @@ def set_background_x11(fname):
     output = subprocess.check_call(cmd)
     return
 
-set_background = set_background_gsettings_mate
+def set_background_dconf(fname):
+    cmd = ['dconf', 'write', '/org/gnome/desktop/background/picture-uri', 'file://' + fname]
+    output = subprocess.check_call(cmd)
+    return
+    
+
+set_background = set_background_dconf
+#set_background = set_background_gconftool2
+#set_background = set_background_gsettings_mate
 #set_background = set_background_lxde
 
 
