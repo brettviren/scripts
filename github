@@ -1,0 +1,66 @@
+#!/usr/bin/python
+'''
+Simple cli to github git repos.
+
+Before using:
+
+ $ pip install --user click
+'''
+
+
+import click
+import subprocess
+
+default_github_user='brettviren'
+
+
+def make_url(**kwds):
+    return '{urlbase}{user}/{repo}.git'.format(**kwds)
+
+
+@click.group()
+@click.option('-u','--user', default=default_github_user,
+              help='Set user (or group) name.')
+@click.option('-r','--read-only', default=False, flag_value=True,
+              help='Use the read-only git URL.')
+@click.pass_context
+def cli(ctx, user, read_only):
+    ctx.obj['user'] = user
+    if read_only:
+        ctx.obj['urlbase'] = 'https://github.com/'
+    else:
+        ctx.obj['urlbase'] = 'git@github.com:'
+
+def run(cmd):
+    p = subprocess.Popen(cmd, shell=True)
+    out,err = p.communicate()
+    print out
+    if err:
+        print err
+    return p.returncode
+
+@cli.command()
+@click.argument('repo')
+@click.pass_context
+def clone(ctx, repo):
+    '''
+    Clone the named repository.
+    '''
+    url = make_url(repo=repo, **dict(ctx.obj))
+    return run('git clone %s' % url)
+
+@cli.command()
+@click.option('-n','--name', default='github',
+              help='Set a nick name for the added remote git repository.')
+@click.argument('repo')
+@click.pass_context
+def add(ctx, name, repo):
+    '''
+    Add github remote.
+    '''
+    url = make_url(repo=repo, **ctx.obj)
+    return run('git remote add %s %s' % (name, url))
+
+
+if __name__ == '__main__':
+    cli(obj={})
