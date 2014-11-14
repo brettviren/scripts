@@ -2,8 +2,15 @@
 
 set -e
 
+sudo apt-get install automake1.11 gir1.2-gtk-2.0 libatk1.0-dev libaudiofile-dev libesd0-dev libgmp-dev libgmpxx4ldbl libgtk2.0-dev libpango1.0-dev libtool libxcomposite-dev libxcursor-dev libxi-dev libxml2-utils libxrandr-dev x11proto-composite-dev x11proto-randr-dev libgdbm-dev libffi-dev texinfo libxtst-dev
+
 workdir="$1" ; shift
 instdir="$1" ; shift
+
+sudo=""
+if [ -n $(echo $instdir | grep '/usr') ] ; then
+    sudo="sudo"
+fi
 
 if [ -z "$instdir" ] ; then
     echo "usage: sawfish-build.sh /path/to/work /path/to/install"
@@ -32,7 +39,7 @@ fi
 pushd librep
 ./autogen.sh --prefix=$instdir --exec-prefix=$instdir
 make
-make install
+$sudo make install
 popd
 
 
@@ -42,7 +49,7 @@ fi
 pushd rep-gtk
 ./autogen.sh --prefix=$instdir --exec-prefix=$instdir
 make
-make install
+$sudo make install
 popd
 
 if [ ! -d sawfish ] ; then
@@ -51,6 +58,27 @@ fi
 pushd sawfish
 ./autogen.sh --prefix=$instdir --exec-prefix=$instdir
 make
-make install
+$sudo make install
 popd
+
+
+xsessdir=$instdir/share/xsessions
+if [ ! -d $xsessdir ] ; then
+    $sudo mkdir $xsessdir
+fi
+$sudo cat <<EOF > $xsessdir/sawfish-mate.desktop
+[Desktop Entry]
+Name=Sawfish/Mate
+Comment=Use the Sawfish window manager inside of the Mate desktop environment
+Exec=/usr/bin/sawfish-mate-session
+TryExec=mate-session
+Type=Application
+EOF
+$sudo cmod 644 $xsessdir/sawfish-mate.desktop
+
+$sudo cat <<EOF > $instdir/bin/sawfish-mate-session
+export WINDOW_MANAGER="$instdir/bin/sawfish"
+exec \$WINDOW_MANAGER & mate-session \$@
+EOF
+$sudo chmod 755 $instdir/bin/sawfish-mate-session
 
