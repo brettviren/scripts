@@ -101,13 +101,14 @@ def set_background_x11(fname):
 
 def set_background_dconf(fname):
     cmd = ['dconf', 'write', '/org/gnome/desktop/background/picture-uri', 'file://' + fname]
+    print dconf
     output = subprocess.check_call(cmd)
     return
     
 
-set_background = set_background_dconf
+#set_background = set_background_dconf
 #set_background = set_background_gconftool2
-#set_background = set_background_gsettings_mate
+set_background = set_background_gsettings_mate
 #set_background = set_background_lxde
 
 
@@ -147,7 +148,8 @@ if __name__ == '__main__':
     try:
         dname = sys.argv[1]
     except IndexError:
-        dname = "$HOME/Desktop/bkg"
+        #dname = "$HOME/Desktop/bkg"
+        dname = "/opt/bv/btsync/bkg"
     cycle(dname,300)
  
 
